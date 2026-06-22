@@ -203,7 +203,18 @@ Password: password
 
 FastAPI automatically generates live, interactive documentation from the code — no separate doc files to maintain.
 
-Once the server is running, open either of these in your browser:
+### Production
+
+The API is deployed on AWS EC2 and accessible at:
+
+| | URL | Description |
+|---|---|---|
+| Swagger UI | `http://13.247.70.10:8000/docs` | Interactive — run requests directly from the browser |
+| ReDoc | `http://13.247.70.10:8000/redoc` | Clean read-only reference |
+
+### Local
+
+Once the server is running locally, open either of these in your browser:
 
 | | URL | Description |
 |---|---|---|
@@ -287,7 +298,9 @@ Request → Routes → Services → Repositories → SQLite
 - JWT tokens expire after 24 hours (1440 minutes) — no refresh token implemented
 - SQLite is sufficient for the expected ~100k orders/month volume with proper indexing
 - No rate limiting — would add in production
-- CORS is open to `localhost:5173` and `localhost:4173` — would restrict to the deployed domain in production
+- CORS is configured to allow `localhost:5173`, `localhost:4173`, and the deployed Vercel frontend — see `docker-compose.yml`
+- A `.env` file is included in the repository intentionally for demo/assessment purposes — in a real project this would be in `.gitignore`
+- Environment variables are set directly in `docker-compose.yml` for the production EC2 deployment so the container is fully self-contained without relying on a `.env` file at runtime
 
 ---
 
@@ -299,3 +312,47 @@ Request → Routes → Services → Repositories → SQLite
 - Add `date_from` / `date_to` format validation as a reusable FastAPI dependency
 - Add integration tests for the reports endpoint
 - Switch to PostgreSQL for higher-volume production deployment
+
+---
+
+## 8. Production Deployment Notes
+
+### Current Deployment (Simple — for demo/testing purposes only)
+
+The backend is deployed directly on an **AWS EC2 instance** running Docker. This was intentionally kept simple for the purposes of this assessment:
+
+- Docker image is built and run directly on the EC2 instance via `docker compose up`
+- Environment variables are hardcoded in `docker-compose.yml`
+- The server is exposed on port `8000` over plain `http://` — **no HTTPS, no load balancer**
+- The `.env` file is committed to the repository — **not secure for a real project**
+- Secrets such as `JWT_SECRET` are not managed securely
+
+> This setup is **not production-grade** and was used purely for demo convenience.
+
+---
+
+### Proper Production Deployment (What I Would Do)
+
+With more time and for a real production system I would replace the above with a fully managed AWS setup:
+
+| Component | Service | Reason |
+|---|---|---|
+| Container registry | **Amazon ECR** | Store and version Docker images securely, integrated with AWS IAM |
+| Container orchestration | **Amazon ECS (Fargate)** | Run containers without managing EC2 instances, auto-scaling built in |
+| Load balancer | **Application Load Balancer (ALB)** | HTTPS termination, health checks, zero-downtime deployments |
+| Secret management | **AWS Secrets Manager** | Store `JWT_SECRET`, DB credentials — never in code or `docker-compose.yml` |
+| Database | **Amazon RDS (PostgreSQL)** | Managed, scalable, automated backups — replaces SQLite at higher volume |
+| CI/CD | **GitHub Actions → ECR → ECS** | Auto-deploy on push to main, no manual SSH needed |
+
+#### Deployment flow with the above setup
+
+```
+GitHub push
+  → GitHub Actions builds Docker image
+  → Pushes image to ECR
+  → Updates ECS service with new task definition
+  → ALB routes HTTPS traffic to healthy ECS tasks
+  → Secrets Manager injects JWT_SECRET and DB credentials at runtime
+```
+
+This would give HTTPS out of the box, horizontal scaling as user load increases, zero hardcoded secrets, and full audit trails via CloudTrail.
