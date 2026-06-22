@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "orderflow-dev-secret-change-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:4173","https://orderflow-ui.brynetinashechikomo.workers.dev/"]
+    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:4173","https://orderflow-ui.brynetinashechikomo.workers.dev"]
 
 
 @lru_cache()
