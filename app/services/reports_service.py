@@ -24,14 +24,31 @@ def get_summary(
     where, params = _date_where(date_from, date_to)
     and_ = (" AND " if where else " WHERE ")  # used to append extra conditions
 
-    # ── 30-day trend ──────────────────────────────────────────────────────────
+    # ── Trend: dynamic range based on filters ──────────────────────────────
     trend = []
-    for i in range(29, -1, -1):
-        day = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_where, day_params = _date_where(
-            max(date_from, day) if date_from else day,
-            min(date_to, day)   if date_to   else day,
-        )
+    if date_from and date_to:
+        start = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        end   = datetime.strptime(date_to,   "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        days_range = (end - start).days + 1
+    elif date_from:
+        start = datetime.strptime(date_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        days_range = (datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - start).days + 1
+    elif date_to:
+        end = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        days_range = min(30, (end - (datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=29))).days + 1)
+    else:
+        days_range = 30
+
+    days_range = max(1, min(days_range, 366))
+
+    for i in range(days_range - 1, -1, -1):
+        if date_from and date_to:
+            day = (start + timedelta(days=(days_range - 1 - i))).strftime("%Y-%m-%d")
+        elif date_from:
+            day = (start + timedelta(days=(days_range - 1 - i))).strftime("%Y-%m-%d")
+        else:
+            day = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        day_where, day_params = _date_where(day, day)
         rows = db.execute(
             f"SELECT status, COUNT(*) as cnt FROM orders {day_where} GROUP BY status",
             day_params,
