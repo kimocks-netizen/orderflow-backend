@@ -22,137 +22,48 @@ FastAPI + SQLite backend for the OrderFlow internal order management system.
 
 ---
 
-## Setup Guide
+## 1. How to Install Dependencies
 
 ### Option 1 — Docker (Recommended)
 
-The easiest way to get running. Docker handles everything: dependencies, migrations, and seeding.
+Docker handles dependencies automatically. No manual install needed — skip to section 3.
 
-#### 1. Clone and enter the backend directory
+### Option 2 — Manual
+
+Create and activate a virtual environment, then install:
 
 ```bash
 cd orderflow-backend
-```
 
-#### 2. Configure environment
+python3 -m venv .venv
+source .venv/bin/activate      # macOS/Linux
+.venv\Scripts\activate         # Windows
 
-A `.env` file is included in the repository with default values for local development. No setup needed for a demo run.
-
-> For production, copy the example and set a strong `JWT_SECRET`:
-> ```bash
-> cp .env.example .env
-> ```
-
-#### 3. Start the server
-
-```bash
-docker compose up
-```
-
-This will:
-- Build the Python image (first run only)
-- Install all dependencies
-- Run database migrations automatically
-- **Seed the database** with 1 admin user + 500 sample orders
-- Start the API server on `http://localhost:8000`
-
-> First time running? If the image hasn't been built yet:
-> ```bash
-> docker compose up --build
-> ```
-
-### Verifying the seed was successful
-
-Once the container is running, check the logs:
-
-```bash
-docker compose logs backend
-```
-
-You should see:
-
-```
-✓ Admin user created  (admin@orderflow.com / password)
-✓ Seeded 500 orders successfully
-```
-
-If you see the admin user or orders were skipped (`already exists — skipping`), that means the data was already there from a previous run — this is fine.
-
-**If seeding failed** (you see an error or the counts are wrong):
-
-```bash
-# Re-run the seed inside the running container
-docker compose exec backend python seed.py
-
-# Or if the container stopped
-docker compose run --rm backend python seed.py
-
-# Nuclear option — wipe the database and start fresh
-docker compose down
-rm -f database/orderflow.db
-docker compose up --build
-```
-
-### Subsequent runs (no rebuild needed)
-
-```bash
-docker compose up
-```
-
-### Stop the server
-
-```bash
-docker compose down
+pip install -r requirements.txt
 ```
 
 ---
 
-### Option 2 — Manual Setup (Without Docker)
+## 2. How to Set Up and Seed the Database
 
-#### 1. Clone and enter the backend directory
+### Option 1 — Docker (Recommended)
 
-```bash
-cd orderflow-backend
-```
+Seeding happens automatically when the container starts. No extra steps needed — see section 3.
 
-#### 2. Create and activate a virtual environment
+### Option 2 — Manual
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate      # macOS/Linux
-.venv\Scripts\activate         # Windows
-```
+A `.env` file is included in the repository for demo purposes. No configuration needed to run locally.
 
-#### 3. Install dependencies
+Run migrations and seed the database:
 
 ```bash
-pip install -r requirements.txt
-```
+uvicorn app.main:app --port 8000
+# migrations run automatically on startup, then stop the server and seed:
 
-#### 4. Configure environment
-
-A `.env` file is included in the repository with default values for local development. No setup needed for a demo run.
-
-> For production, copy the example and set a strong `JWT_SECRET`:
-> ```bash
-> cp .env.example .env
-> ```
-
-#### 5. Run the server
-
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-Migrations run automatically on startup — the `database/` folder and `.db` file are created if they don't exist.
-
-#### 6. Seed the database
-
-```bash
 python seed.py
 ```
 
-### Verifying the seed was successful
+#### Verifying the seed was successful
 
 You should see:
 
@@ -161,7 +72,7 @@ You should see:
 ✓ Seeded 500 orders successfully
 ```
 
-If you see `already exists — skipping` or `already seeded`, the data is already there from a previous run.
+If you see `already exists — skipping`, the data is already there from a previous run — this is fine.
 
 **If seeding failed** (error or missing data):
 
@@ -175,6 +86,110 @@ The seed script is idempotent — running it multiple times is safe, it skips ex
 
 ---
 
+## 3. How to Run the Backend
+
+### Option 1 — Docker (Recommended)
+
+A `.env` file is included in the repository for demo purposes. No configuration needed.
+
+```bash
+cd orderflow-backend
+docker compose up
+```
+
+This will:
+- Build the Python image (first time only)
+- Install all dependencies
+- Run database migrations automatically
+- Seed the database with 1 admin user + 500 sample orders
+- Start the API server on `http://localhost:8000`
+
+> First time running and the image hasn't been built yet:
+> ```bash
+> docker compose up --build
+> ```
+
+#### Verifying the seed was successful
+
+```bash
+docker compose logs backend
+```
+
+You should see:
+
+```
+✓ Admin user created  (admin@orderflow.com / password)
+✓ Seeded 500 orders successfully
+```
+
+**If seeding failed:**
+
+```bash
+# Re-run seed inside the running container
+docker compose exec backend python seed.py
+
+# Or if the container stopped
+docker compose run --rm backend python seed.py
+
+# Wipe and start fresh
+docker compose down
+rm -f database/orderflow.db
+docker compose up --build
+```
+
+#### Stop the server
+
+```bash
+docker compose down
+```
+
+### Option 2 — Manual
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Migrations run automatically on startup — the `database/` folder and `.db` file are created if they don't exist.
+
+The API is available at `http://localhost:8000`.
+
+---
+
+## 4. How to Run the Frontend
+
+See the frontend README at `orderflow-ui/README.md` for full setup instructions.
+
+Quick start:
+
+```bash
+cd orderflow-ui
+npm install
+npm run dev
+```
+
+Frontend runs at `http://localhost:5173`. Requires the backend to be running first.
+
+---
+
+## 5. How to Run Tests
+
+```bash
+# Ensure your virtual environment is active (Option 2 only)
+pytest
+
+# With verbose output
+pytest -v
+
+# Specific test file
+pytest tests/test_orders.py -v
+pytest tests/test_auth.py -v
+pytest tests/test_status_transitions.py -v
+```
+
+Tests use an in-memory SQLite database — no test data is written to disk and no running server is needed.
+
+---
+
 ## Default Login Credentials
 
 ```
@@ -184,31 +199,22 @@ Password: password
 
 ---
 
-## Running Tests
+## Interactive API Docs
 
-```bash
-# Make sure your virtual environment is active
-pytest
+FastAPI automatically generates live, interactive documentation from the code — no separate doc files to maintain.
 
-# With verbose output
-pytest -v
+Once the server is running, open either of these in your browser:
 
-# Specific test file
-pytest tests/test_orders.py -v
-```
-
-Tests use an in-memory SQLite database — no test data is written to disk.
+| | URL | Description |
+|---|---|---|
+| Swagger UI | `http://localhost:8000/docs` | Interactive — run requests directly from the browser |
+| ReDoc | `http://localhost:8000/redoc` | Clean read-only reference |
 
 ---
 
 ## API Reference
 
-Interactive API docs are auto-generated by FastAPI:
-
-- **Swagger UI** — `http://localhost:8000/docs` (interactive, test endpoints directly)
-- **ReDoc** — `http://localhost:8000/redoc` (clean read-only reference)
-
-### Endpoints summary
+### Endpoints Summary
 
 | Method | Endpoint | Authentication Required | Description |
 |--------|----------|------------------------|-------------|
@@ -222,13 +228,13 @@ Interactive API docs are auto-generated by FastAPI:
 | `GET` | `/api/dashboard/summary` | Yes | Dashboard metrics |
 | `GET` | `/api/reports/summary` | Yes | Reports with date range filter |
 
-### Order query params
+### Order Query Params
 
 ```
 GET /api/orders?page=1&page_size=20&status=pending&search=john&date_from=2025-01-01&date_to=2025-01-31
 ```
 
-### Order lifecycle
+### Order Lifecycle
 
 ```
 pending → paid → shipped
@@ -238,15 +244,19 @@ paid    → cancelled
 
 Any other transition returns `400 Bad Request`.
 
+---
+
 ## Stretch Goals Completed
 
 The assessment listed the following as optional extras. All three were implemented:
 
 | Stretch Goal | Implemented | Details |
 |---|---|---|
-| Status history / audit trail | Yes | Every status change is recorded in `order_status_history` table with `from_status`, `to_status`, and `changed_at`. Exposed via `GET /api/orders/{id}/history`. Visible on the order detail page as a full timeline. |
+| Status history / audit trail | Yes | Every status change is recorded in `order_status_history` table with `from_status`, `to_status`, and `changed_at`. Exposed via `GET /api/orders/{id}/history`. Visible on the order detail page as a full chronological timeline. |
 | Additional dashboard metrics | Yes | Total revenue, average order value, orders today, 7-day orders-per-day chart with hover tooltip. |
 | Reports page | Yes | 30-day (or custom date range) trend chart with bar/line toggle, cancellation rate, avg fulfilment days, peak day, top 5 customers, revenue vs previous month. |
+
+---
 
 ## Architecture
 
@@ -260,7 +270,7 @@ Request → Routes → Services → Repositories → SQLite
 - **Schemas** (`app/schemas/`) — Pydantic models for request/response shapes
 - **Database** (`app/database/`) — SQLite connection, migrations runner
 
-### Key decisions
+### Key Decisions
 
 - **Raw SQL over ORM** — demonstrates SQL competence, full control over queries
 - **Offset pagination** — simple page/page_size pattern suits the use case
@@ -271,19 +281,21 @@ Request → Routes → Services → Repositories → SQLite
 
 ---
 
-## Assumptions & Trade-offs
+## 6. Assumptions & Trade-offs
 
 - Single admin user — the assessment does not require multi-user or RBAC
 - JWT tokens expire after 24 hours (1440 minutes) — no refresh token implemented
 - SQLite is sufficient for the expected ~100k orders/month volume with proper indexing
 - No rate limiting — would add in production
-- CORS is open to `localhost:5173` and `localhost:4173` — would restrict to deployed domain in production
+- CORS is open to `localhost:5173` and `localhost:4173` — would restrict to the deployed domain in production
 
-## What I'd Improve With More Time
+---
+
+## 7. Areas I Would Improve With More Time
 
 - Add refresh token support
 - Add rate limiting middleware
-- Paginate status history endpoint
-- Add `date_from` / `date_to` validation (regex + logical check) as a FastAPI dependency
+- Paginate the status history endpoint
+- Add `date_from` / `date_to` format validation as a reusable FastAPI dependency
 - Add integration tests for the reports endpoint
 - Switch to PostgreSQL for higher-volume production deployment
