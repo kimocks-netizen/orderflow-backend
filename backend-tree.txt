@@ -1,0 +1,137 @@
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                        # FastAPI app, CORS, lifespan (auto-run migrations)
+│   │
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py                  # pydantic-settings: DATABASE_PATH, JWT_SECRET, etc.
+│   │   └── security.py               # create_access_token, verify_token, get_current_user
+│   │
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   ├── auth.py                    # POST /api/auth/login
+│   │   ├── orders.py                  # GET /api/orders, GET /{id}, POST, PATCH /{id}/status
+│   │   └── dashboard.py              # GET /api/dashboard/summary
+│   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── auth_service.py            # verify_password, hash_password, authenticate_user
+│   │   ├── order_service.py           # create_order, get_orders (paginated), update_status
+│   │   └── dashboard_service.py       # get_summary (counts, revenue, avg order value)
+│   │
+│   ├── repositories/
+│   │   ├── __init__.py
+│   │   ├── user_repository.py         # find_by_email (raw SQL)
+│   │   └── order_repository.py        # insert, find_all (cursor pagination), find_by_id, update_status
+│   │
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── auth.py                    # LoginRequest, LoginResponse, TokenPayload
+│   │   ├── orders.py                  # CreateOrderRequest, UpdateStatusRequest, OrderResponse, PaginatedOrdersResponse
+│   │   └── dashboard.py              # DashboardSummary
+│   │
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── connection.py              # get_db() dependency (sqlite3, WAL mode)
+│   │   └── migrations.py             # Run numbered .sql files on startup
+│   │
+│   ├── errors/
+│   │   ├── __init__.py
+│   │   └── exceptions.py             # AppError, ValidationError, NotFoundError, ConflictError
+│   │
+│   └── middleware/
+│       ├── __init__.py
+│       └── error_handler.py           # Global exception handler → { "detail": "..." }
+│
+├── database/
+│   ├── 001_create_tables.sql          # users, orders, order_status_history tables
+│   └── 002_indexes.sql                # idx_orders_status, idx_orders_created_at_id, etc.
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py                    # Fixtures: test client, test DB, auth headers
+│   ├── test_auth.py                   # Login success/failure, invalid credentials, JWT validation
+│   ├── test_orders.py                 # CRUD, pagination, filters, search
+│   └── test_status_transitions.py     # All valid + invalid combos, race condition handling
+│
+├── seed.py                            # Seed script: 1 admin + 500 orders across all statuses
+├── Dockerfile                         # Python 3.12 slim, uvicorn production server
+├── docker-compose.yml                 # Backend + frontend single command startup
+├── requirements.txt                   # fastapi, uvicorn, pydantic-settings, bcrypt, python-jose
+├── .env                               # Local env vars
+├── .env.example                       # Example env template
+├── .gitignore
+└── tree.txt                           # This file structure
+
+---
+
+## Layered Architecture
+
+```
+Request → Routes (HTTP + validation) → Services (business logic) → Repositories (raw SQL) → SQLite
+```
+
+### Routes (app/routes/)
+  - Parse request params/body
+  - Pydantic schema validation (automatic via FastAPI)
+  - Call service layer
+  - Return response with appropriate HTTP status
+
+### Services (app/services/)
+  - Business rules: status transition validation, auth logic
+  - Orchestrate repository calls
+  - Raise domain exceptions (NotFoundError, ValidationError)
+  - No HTTP or SQL knowledge
+
+### Repositories (app/repositories/)
+  - Raw SQL queries (sqlite3)
+  - Cursor-based pagination logic
+  - Dynamic filter building
+  - Return dicts/lists — no domain logic
+
+---
+
+## Key Patterns
+
+### Cursor-Based Pagination (order_repository.py)
+  Composite cursor: created_at + id
+  SQL: WHERE (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?+1
+  Fetch limit+1 rows → if extra row exists, has_more=True
+  Response: { items, next_cursor, has_more }
+
+### Status Transitions (order_service.py)
+  ALLOWED_TRANSITIONS dict defines valid moves
+  Atomic UPDATE: WHERE id = ? AND status = ? (prevents race condition)
+  rows_affected == 0 → NotFoundError or ConflictError
+
+### Auth (core/security.py)
+  JWT encode/decode using python-jose
+  get_current_user: FastAPI Depends() extracts user from Bearer token
+  Single admin user — no RBAC complexity
+
+### Error Handling (errors/exceptions.py + middleware/error_handler.py)
+  Custom exception hierarchy: AppError → ValidationError, NotFoundError, etc.
+  Global exception handler catches AppError → returns { "detail": message } + status code
+  Pydantic validation errors → 422 (automatic by FastAPI)
+
+### Config (core/config.py)
+  pydantic-settings loads from .env
+  Fields: database_path, jwt_secret, jwt_algorithm, jwt_expire_minutes
+  @lru_cache() singleton
+
+### Database (database/connection.py)
+  sqlite3 connection with WAL mode + foreign keys enabled
+  FastAPI dependency: def get_db() yields connection
+  Migrations auto-run on startup via lifespan event
+
+---
+
+## Dependencies (requirements.txt)
+
+  fastapi>=0.115.0
+  uvicorn[standard]>=0.30.0
+  pydantic-settings>=2.0.0
+  python-jose[cryptography]>=3.3.0
+  bcrypt>=4.0.0
+  python-multipart>=0.0.9

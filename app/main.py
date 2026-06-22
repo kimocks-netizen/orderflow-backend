@@ -6,7 +6,7 @@ from app.core.config import get_settings
 from app.database.migrations import run_migrations
 from app.errors.exceptions import AppError
 from app.middleware.error_handler import app_error_handler
-from app.routes import auth, orders, dashboard
+from app.routes import auth, orders, dashboard, reports
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app.add_exception_handler(AppError, app_error_handler)
 app.include_router(auth.router,      prefix="/api")
 app.include_router(orders.router,    prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(reports.router,   prefix="/api")
 
 
 @app.get("/health")

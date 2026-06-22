@@ -53,19 +53,16 @@ def rand_date(days_ago_max: int = 60) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def build_history(order_id: int, status: str, created_at: str) -> list[tuple]:
-    """Build a realistic status history chain ending at the given status."""
+def build_history(order_id: int, status: str, created_at: str) -> tuple[list[tuple], str]:
+    """Build a realistic status history chain ending at the given status.
+    Returns (entries, final_updated_at)."""
     chain = ["pending"]
     current = "pending"
     while current != status:
         nexts = TRANSITIONS[current]
         if not nexts:
             break
-        # Bias towards the target status
-        if status in nexts:
-            current = status
-        else:
-            current = nexts[0]
+        current = status if status in nexts else nexts[0]
         chain.append(current)
 
     entries = []
@@ -75,8 +72,11 @@ def build_history(order_id: int, status: str, created_at: str) -> list[tuple]:
         changed_at = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
         entries.append((order_id, prev, step, changed_at))
         prev = step
-        ts += timedelta(hours=random.randint(1, 48))
-    return entries
+        ts += timedelta(hours=random.randint(12, 72))
+
+    # updated_at = timestamp of the last transition
+    final_ts = entries[-1][3] if entries else created_at
+    return entries, final_ts
 
 
 def seed():
@@ -114,7 +114,7 @@ def seed():
         amount      = round(random.uniform(10.0, 999.99), 2)
         status      = random.choices(STATUSES, STATUS_WEIGHTS)[0]
         created_at  = rand_date(60)
-        updated_at  = created_at
+        history, updated_at = build_history(0, status, created_at)  # id placeholder
 
         cur = conn.execute(
             """
@@ -125,7 +125,9 @@ def seed():
         )
         order_id = cur.lastrowid
 
-        for entry in build_history(order_id, status, created_at):
+        # Re-build history with the real order_id
+        history, _ = build_history(order_id, status, created_at)
+        for entry in history:
             conn.execute(
                 "INSERT INTO order_status_history (order_id, from_status, to_status, changed_at) VALUES (?, ?, ?, ?)",
                 entry,
